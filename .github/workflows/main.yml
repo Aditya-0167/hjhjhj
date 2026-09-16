@@ -1,0 +1,95 @@
+name: Verify - cdap GCP metadata sidecar source excerpts
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout report repo
+        uses: actions/checkout@v4
+
+      - name: Checkout upstream cdapio/cdap at the tested commit
+        uses: actions/checkout@v4
+        with:
+          repository: cdapio/cdap
+          ref: 35493c2a4f66e16f4324ee4ef4c7243c64cd8a72
+          path: upstream
+
+      - name: Diff every cited source file against upstream
+        run: |
+          set -eo pipefail
+          declare -A files=(
+            ["GcpMetadataHttpHandlerInternal.java"]="cdap-app-fabric/src/main/java/io/cdap/cdap/internal/app/worker/sidecar/GcpMetadataHttpHandlerInternal.java"
+            ["GcpWorkloadIdentityInternalAuthenticator.java"]="cdap-app-fabric/src/main/java/io/cdap/cdap/internal/app/worker/sidecar/GcpWorkloadIdentityInternalAuthenticator.java"
+            ["GcpMetadataTaskContext.java"]="cdap-proto/src/main/java/io/cdap/cdap/proto/security/GcpMetadataTaskContext.java"
+            ["GcpMetadataTaskContextUtil.java"]="cdap-common/src/main/java/io/cdap/cdap/common/utils/GcpMetadataTaskContextUtil.java"
+            ["GcpWorkloadIdentityHttpHandlerInternal.java"]="cdap-app-fabric/src/main/java/io/cdap/cdap/internal/namespace/credential/handler/GcpWorkloadIdentityHttpHandlerInternal.java"
+            ["DefaultNamespaceCredentialProviderService.java"]="cdap-app-fabric/src/main/java/io/cdap/cdap/internal/namespace/credential/DefaultNamespaceCredentialProviderService.java"
+            ["InternalAccessEnforcer.java"]="cdap-security/src/main/java/io/cdap/cdap/security/authorization/InternalAccessEnforcer.java"
+            ["TaskWorkerTwillApplication.java"]="cdap-app-fabric/src/main/java/io/cdap/cdap/internal/app/worker/TaskWorkerTwillApplication.java"
+            ["TaskWorkerHttpHandlerInternal.java"]="cdap-common/src/main/java/io/cdap/cdap/common/internal/remote/TaskWorkerHttpHandlerInternal.java"
+            ["RemoteValidationTask.java"]="cdap-app-templates/cdap-etl/cdap-data-pipeline-base/src/main/java/io/cdap/cdap/datapipeline/service/RemoteValidationTask.java"
+          )
+          for name in "${!files[@]}"; do
+            diff "upstream/${files[$name]}" "source-excerpts/${name}.REAL"
+            echo "OK: $name identical to upstream"
+          done | tee -a verify-run.log
+
+      - name: Confirm the two unauthenticated methods perform no authentication check
+        run: |
+          set -eo pipefail
+          python3 - <<'EOF' | tee -a verify-run.log
+          # Precise check: does setContext/clearContext's own method body (bounded by
+          # matching braces, not a fixed character window) call anything that looks
+          # like an auth/permission check? A loose substring match on "auth" is too
+          # broad here - gcpWorkloadIdentityInternalAuthenticator is a field name, not
+          # a check - so this looks for actual verification call patterns instead.
+          danger_patterns = [
+              ".enforce(", ".validate(", ".verify(", "checkAccess", "checkPermission",
+              "UNAUTHORIZED", "FORBIDDEN", "AccessException", "UnauthorizedException",
+              "requireHeader", "authenticate(",
+          ]
+          src = open("source-excerpts/GcpMetadataHttpHandlerInternal.java.REAL").read()
+          for method in ["setContext", "clearContext"]:
+              start = src.index(f"public void {method}(")
+              depth = 0
+              started = False
+              end = None
+              for i, ch in enumerate(src[start:], start=start):
+                  if ch == "{":
+                      depth += 1
+                      started = True
+                  elif ch == "}":
+                      depth -= 1
+                      if started and depth == 0:
+                          end = i + 1
+                          break
+              body = src[start:end]
+              hits = [p for p in danger_patterns if p in body]
+              if hits:
+                  print(f"NOTE: {method}() now contains {hits} - re-inspect manually, may now be authenticated")
+                  raise SystemExit(1)
+              print(f"Confirmed: {method}()'s own method body (bounded correctly, {end-start} chars) performs no auth/permission check")
+          EOF
+
+      - name: Confirm the crypto check in InternalAccessEnforcer is still present
+        run: |
+          set -e
+          grep -q "tokenManager.validateSecret" source-excerpts/InternalAccessEnforcer.java.REAL \
+            && echo "Confirmed: cryptographic validateSecret() check still present (this is what blocks the naive bypass)" | tee -a verify-run.log
+
+      - name: Confirm the terminate-on-untrusted-code policy is still present
+        run: |
+          set -e
+          grep -q "setTerminateOnComplete" source-excerpts/RemoteValidationTask.java.REAL \
+            && echo "Confirmed: terminate-on-complete policy for non-system-scope plugins still present" | tee -a verify-run.log
+
+      - name: Upload verification log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-run-log
+          path: verify-run.log
