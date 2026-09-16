@@ -1,0 +1,11 @@
+=== Confirming all source excerpts are byte-identical to the real cdapio/cdap source ===
+GcpMetadataHttpHandlerInternal.java: IDENTICAL
+GcpWorkloadIdentityInternalAuthenticator.java: IDENTICAL
+GcpMetadataTaskContext.java: IDENTICAL
+GcpMetadataTaskContextUtil.java: IDENTICAL
+GcpWorkloadIdentityHttpHandlerInternal.java: IDENTICAL
+DefaultNamespaceCredentialProviderService.java: IDENTICAL
+InternalAccessEnforcer.java: IDENTICAL
+TaskWorkerTwillApplication.java: IDENTICAL
+TaskWorkerHttpHandlerInternal.java: IDENTICAL
+RemoteValidationTask.java: IDENTICAL

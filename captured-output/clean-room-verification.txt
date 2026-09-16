@@ -1,0 +1,12 @@
+=== Clean-room re-verification (fresh git clone into a separate directory, independent of the clone used to build this report) ===
+
+OK: GcpMetadataHttpHandlerInternal.java identical to fresh upstream clone
+OK: GcpWorkloadIdentityInternalAuthenticator.java identical to fresh upstream clone
+OK: GcpMetadataTaskContext.java identical to fresh upstream clone
+OK: GcpMetadataTaskContextUtil.java identical to fresh upstream clone
+OK: GcpWorkloadIdentityHttpHandlerInternal.java identical to fresh upstream clone
+OK: DefaultNamespaceCredentialProviderService.java identical to fresh upstream clone
+OK: InternalAccessEnforcer.java identical to fresh upstream clone
+OK: TaskWorkerTwillApplication.java identical to fresh upstream clone
+OK: TaskWorkerHttpHandlerInternal.java identical to fresh upstream clone
+OK: RemoteValidationTask.java identical to fresh upstream clone
